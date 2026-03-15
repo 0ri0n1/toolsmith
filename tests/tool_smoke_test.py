@@ -383,17 +383,61 @@ def test_mcpo_reachable():
         return False
 
 
+def load_failed_tests(results_file):
+    """Load names of previously failed tests from a results file."""
+    try:
+        with open(results_file, "r") as f:
+            data = json.load(f)
+        return [t["test"] for t in data.get("tests", []) if t.get("status") == "fail"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return []
+
+
+# Map test names to their functions for selective rerun
+TEST_REGISTRY = {}
+
+
+def register_test(name, func):
+    TEST_REGISTRY[name] = func
+
+
 def main():
     parser = argparse.ArgumentParser(description="Model Forge smoke tests")
     parser.add_argument("--model", default="toolsmith", help="Model name to test")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--rerun-failed", action="store_true",
+                        help="Only rerun tests that failed in the last run")
     args = parser.parse_args()
 
     model = args.model
+    results_file = "tests/smoke_results.json"
+
     log(f"\n=== Model Forge Smoke Tests ===", CYAN)
     log(f"Model: {model}\n")
 
-    # Core tests — stop early if infrastructure is broken
+    # Build the test registry
+    all_tests = [
+        ("Model generates output", lambda: test_model_generates(model)),
+        ("Model follows instructions", lambda: test_model_follows_instructions(model)),
+        ("Tool call format correct", lambda: test_tool_call_format(model)),
+        ("Tool response handling", lambda: test_tool_response_handling(model)),
+        ("No tool when unnecessary", lambda: test_no_tool_when_unnecessary(model)),
+        ("Multi-tool selection", lambda: test_multi_tool_selection(model)),
+    ]
+
+    # Determine which tests to run
+    if args.rerun_failed:
+        failed_names = load_failed_tests(results_file)
+        if not failed_names:
+            log("No previous failures found. Running all tests.", YELLOW)
+            tests_to_run = all_tests
+        else:
+            tests_to_run = [(n, f) for n, f in all_tests if n in failed_names]
+            log(f"Rerunning {len(tests_to_run)} previously failed test(s)", YELLOW)
+    else:
+        tests_to_run = all_tests
+
+    # Core tests — always run infrastructure checks
     log("--- Infrastructure ---", YELLOW)
     if not test_ollama_running():
         log("\nCannot proceed without Ollama. Aborting.", RED)
@@ -405,17 +449,18 @@ def main():
 
     test_mcpo_reachable()
 
-    # Generation tests
-    log("\n--- Generation ---", YELLOW)
-    test_model_generates(model)
-    test_model_follows_instructions(model)
+    # Run selected tests
+    test_names_to_run = {n for n, _ in tests_to_run}
 
-    # Tool use tests
+    log("\n--- Generation ---", YELLOW)
+    for name, func in tests_to_run:
+        if name in ("Model generates output", "Model follows instructions"):
+            func()
+
     log("\n--- Tool Use ---", YELLOW)
-    test_tool_call_format(model)
-    test_tool_response_handling(model)
-    test_no_tool_when_unnecessary(model)
-    test_multi_tool_selection(model)
+    for name, func in tests_to_run:
+        if name not in ("Model generates output", "Model follows instructions"):
+            func()
 
     # Summary
     log(f"\n=== Results ===", CYAN)
@@ -424,7 +469,6 @@ def main():
     log(f"Skipped: {skipped}", YELLOW if skipped > 0 else "")
 
     # Write results to file
-    results_file = "tests/smoke_results.json"
     try:
         with open(results_file, "w") as f:
             json.dump({
@@ -433,6 +477,7 @@ def main():
                 "passed": passed,
                 "failed": failed,
                 "skipped": skipped,
+                "rerun_failed": args.rerun_failed,
                 "tests": results
             }, f, indent=2)
         log(f"\nResults written to {results_file}")

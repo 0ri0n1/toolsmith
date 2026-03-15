@@ -115,10 +115,22 @@ def run_eval(model, case):
     return all_pass, "; ".join(details) if details else ""
 
 
+def load_failed_names(results_file):
+    """Load names of previously failed cases from a results file."""
+    try:
+        with open(results_file, "r") as f:
+            data = json.load(f)
+        return [r["name"] for r in data.get("results", []) if r.get("status") == "fail"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return []
+
+
 def main():
     parser = argparse.ArgumentParser(description="Model Forge eval runner")
     parser.add_argument("--model", default="toolsmith", help="Model to evaluate")
     parser.add_argument("--evals", default="evals/tool_use_cases.json", help="Eval cases file")
+    parser.add_argument("--rerun-failed", action="store_true",
+                        help="Only rerun cases that failed in the last run")
     args = parser.parse_args()
 
     log(f"\n=== Model Forge Evals ===", CYAN)
@@ -132,6 +144,17 @@ def main():
         sys.exit(1)
 
     cases = data.get("test_cases", [])
+
+    # Filter to only previously failed cases if --rerun-failed
+    out_file = "evals/eval_results.json"
+    if args.rerun_failed:
+        failed_names = load_failed_names(out_file)
+        if not failed_names:
+            log("No previous failures found. Running all cases.", YELLOW)
+        else:
+            cases = [c for c in cases if c.get("name") in failed_names]
+            log(f"Rerunning {len(cases)} previously failed case(s)", YELLOW)
+
     log(f"Cases: {len(cases)}\n")
 
     passed = 0
@@ -155,7 +178,6 @@ def main():
     log(f"Failed: {failed}/{len(cases)}", RED if failed > 0 else "")
 
     # Write results
-    out_file = "evals/eval_results.json"
     try:
         with open(out_file, "w") as f:
             json.dump({
@@ -164,6 +186,7 @@ def main():
                 "passed": passed,
                 "failed": failed,
                 "total": len(cases),
+                "rerun_failed": args.rerun_failed,
                 "results": results
             }, f, indent=2)
         log(f"\nResults written to {out_file}")

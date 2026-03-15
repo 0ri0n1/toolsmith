@@ -249,6 +249,109 @@
       "assertions": [
         {"type": "tool_called", "name": "list_files"}
       ]
+    },
+    {
+      "name": "Composite tool — selects composite over individual",
+      "messages": [
+        {"role": "user", "content": "Do a full network recon on 10.0.0.0/24 — find hosts, scan ports, and detect services"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "network_recon",
+            "description": "Full network reconnaissance: discovers live hosts via ping sweep, scans ports on found hosts, then detects service versions. Returns unified report.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string", "description": "Target IP, CIDR range, or hostname"},
+                "ports": {"type": "string", "description": "Port specification (default: top 1000)"}
+              },
+              "required": ["target"]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run a single nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "network_recon"},
+        {"type": "arg_value", "name": "target", "value": "10.0.0.0/24"}
+      ]
+    },
+    {
+      "name": "Composite tool — interprets multi-step results",
+      "messages": [
+        {"role": "user", "content": "Run full network recon on 192.168.1.0/24"},
+        {"role": "assistant", "content": "", "tool_calls": [
+          {"function": {"name": "network_recon", "arguments": {"target": "192.168.1.0/24"}}}
+        ]},
+        {"role": "tool", "content": "{\"tool\": \"network-recon\", \"status\": \"complete\", \"steps_completed\": 3, \"steps_total\": 3, \"steps\": [{\"name\": \"ping_sweep\", \"success\": true, \"data\": {\"hosts_found\": 3, \"hosts\": [\"192.168.1.1\", \"192.168.1.10\", \"192.168.1.50\"]}}, {\"name\": \"port_scan\", \"success\": true, \"data\": {\"results\": {\"192.168.1.1\": [22, 80, 443], \"192.168.1.10\": [22, 3306], \"192.168.1.50\": [80, 8080]}}}, {\"name\": \"service_detect\", \"success\": true, \"data\": {\"services\": {\"192.168.1.1\": {\"22\": \"OpenSSH 8.9\", \"80\": \"nginx 1.24\", \"443\": \"nginx 1.24\"}, \"192.168.1.10\": {\"22\": \"OpenSSH 8.9\", \"3306\": \"MySQL 8.0\"}, \"192.168.1.50\": {\"80\": \"Apache 2.4\", \"8080\": \"Tomcat 9.0\"}}}}]}"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "network_recon",
+            "description": "Full network reconnaissance composite tool",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "content_contains", "value": "192.168.1.1"},
+        {"type": "content_contains", "value": "mysql"},
+        {"type": "content_contains", "value": "nginx"}
+      ]
+    },
+    {
+      "name": "Composite tool — handles partial failure gracefully",
+      "messages": [
+        {"role": "user", "content": "Run full network recon on 10.10.10.0/24"},
+        {"role": "assistant", "content": "", "tool_calls": [
+          {"function": {"name": "network_recon", "arguments": {"target": "10.10.10.0/24"}}}
+        ]},
+        {"role": "tool", "content": "{\"tool\": \"network-recon\", \"status\": \"partial\", \"steps_completed\": 1, \"steps_total\": 3, \"error\": \"Chain stopped at step 'port_scan': Scan timed out after 120s\", \"steps\": [{\"name\": \"ping_sweep\", \"success\": true, \"data\": {\"hosts_found\": 5, \"hosts\": [\"10.10.10.1\", \"10.10.10.2\", \"10.10.10.3\", \"10.10.10.4\", \"10.10.10.5\"]}}, {\"name\": \"port_scan\", \"success\": false, \"error\": \"Scan timed out after 120s\"}]}"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "network_recon",
+            "description": "Full network reconnaissance composite tool",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "content_contains", "value": "5"},
+        {"type": "content_contains", "value": "timed out"}
+      ]
     }
   ]
 }

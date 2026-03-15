@@ -1,5 +1,6 @@
 # Generated test/eval results
 *_results.json
+scripts/*_results.json
 
 # Logs
 *.log

@@ -42,13 +42,25 @@ It should be fast and cheap.
 
 1. **Inspects** your current environment (Ollama models, configs, test results)
 2. **Asks** 1-2 clarifying questions if needed
-3. **Decides** base model, parameters, system prompt, tool transport
-4. **Generates** Modelfile, configs, tests
-5. **Builds** the model via `ollama create`
-6. **Tests** with smoke tests and evals
-7. **Reports** what passed and failed
+3. **Generates tools** — if the tools don't exist yet, creates MCP servers, registers them in MCPO, and validates them
+4. **Decides** base model, parameters, system prompt, tool transport
+5. **Generates** Modelfile, configs, tests
+6. **Builds** the model via `ollama create`
+7. **Tests** with smoke tests and evals
+8. **Reports** what passed and failed
 
 ### Example conversations
+
+**Model with auto-generated tools:**
+> "Build me a model that can query my QuickBooks invoices"
+
+The subagent will:
+- Ask what operations (lookup, search, list unpaid, etc.)
+- Generate `tool-transport/quickbooks-server.py` (a real MCP server)
+- Register it in `tool-transport/mcpo-config.json`
+- Validate the server with `python scripts/test_tool_server.py`
+- Build a custom Ollama model tuned for that tool
+- Test the full pipeline
 
 **Simple model request:**
 > "Make a model for code review with git tools"
@@ -91,19 +103,11 @@ The subagent will:
 
 ### Add a tool via MCPO
 
-1. Create an MCP server (Python + FastMCP):
-```python
-from mcp.server.fastmcp import FastMCP
-mcp = FastMCP("my-tool")
+**Automatic (recommended):** Tell the model-forge subagent what tool you need. It will generate the MCP server, register it, and validate it.
 
-@mcp.tool()
-async def my_function(param: str) -> str:
-    '''Description of what this tool does.'''
-    return f"Result for {param}"
+**Manual:**
 
-if __name__ == "__main__":
-    mcp.run(transport="stdio")
-```
+1. Create an MCP server in `tool-transport/<name>-server.py` following the nmap-server.py pattern (see `tool-transport/nmap-server.py` for the gold standard)
 
 2. Add to `tool-transport/mcpo-config.json`:
 ```json
@@ -111,16 +115,33 @@ if __name__ == "__main__":
   "mcpServers": {
     "my-tool": {
       "command": "python",
-      "args": ["path/to/server.py"],
+      "args": ["/app/tool-transport/my-tool-server.py"],
       "env": {}
     }
   }
 }
 ```
 
-3. Restart MCPO container
+3. Validate the server:
+```bash
+python scripts/test_tool_server.py tool-transport/my-tool-server.py
+```
 
-4. Configure in Open WebUI: Admin → Settings → Tools → Add OpenAPI tool → `http://mcpo:8000/my-tool`
+4. Restart MCPO container
+
+5. Configure in Open WebUI: Admin → Settings → Tools → Add OpenAPI tool → `http://mcpo:8000/my-tool`
+
+### Validate any MCP server
+
+The tool server validator tests that an MCP server starts, responds to the protocol handshake, and lists its tools correctly:
+
+```bash
+# Basic validation
+python scripts/test_tool_server.py tool-transport/my-server.py
+
+# Validate and invoke a specific tool
+python scripts/test_tool_server.py tool-transport/nmap-server.py --invoke nmap_scan '{"target": "127.0.0.1"}'
+```
 
 ### Run specific tests
 

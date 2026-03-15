@@ -5,12 +5,16 @@
 Model Forge is a local-first system for building custom Ollama models with tool integration. It is operated through a Claude Code subagent that interviews the user, makes architecture decisions, generates configs, and validates the result.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Claude Code                       │
-│              (model-forge subagent)                  │
-│                                                      │
-│  Interview → Architecture → Generate → Build → Test  │
-└──────────────┬───────────────────────────┬───────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        Claude Code                               │
+│                  (model-forge subagent)                           │
+│                                                                   │
+│  Interview → Tool Gen → Architecture → Generate → Build → Test   │
+│                  ↓                                                │
+│          Generate MCP server                                      │
+│          Register in MCPO                                         │
+│          Validate via test_tool_server.py                         │
+└──────────────┬───────────────────────────┬───────────────────────┘
                │ generates                 │ tests via
                ▼                           ▼
 ┌──────────────────┐           ┌──────────────────────┐
@@ -63,8 +67,14 @@ Model Forge is a local-first system for building custom Ollama models with tool 
 - Stack verification checks file completeness and coherence
 - Results are written to JSON for tracking
 
-### 5. Packaging (Model Forge Subagent)
-- Generates all configuration files
+### 5. Tool Generation (Model Forge Phase 2.5)
+- When tools don't already exist, generates FastMCP stdio servers
+- Follows the nmap-server.py pattern: sanitization, structured JSON, stderr logging
+- Registers in MCPO config automatically
+- Validates via `scripts/test_tool_server.py` before proceeding
+
+### 6. Packaging (Model Forge Subagent)
+- Generates all configuration files (including tool servers when needed)
 - Builds the Ollama model
 - Runs verification
 - Reports results
@@ -79,6 +89,10 @@ Model Forge is a local-first system for building custom Ollama models with tool 
 | Temperature | 0.15 | Low for reliable tool selection, adjustable per use case |
 | Context | 16384 | Adequate for most tool-use; increase for complex multi-tool chains |
 | Test framework | Standalone Python (no deps) | Zero install, runs anywhere Python exists |
+| Tool generation | Auto via Phase 2.5 | Subagent generates MCP servers from user description |
+| Tool validation | scripts/test_tool_server.py | Validates MCP protocol handshake + tool listing |
+| Failure retry | Classify + auto-fix, max 3 | Automated loop: classify failures, fix system prompt/params, rebuild, retest |
+| Composite tools | CompositeToolBuilder framework | Small models can't orchestrate multi-tool chains; one composite tool is more reliable |
 
 ## File Layout
 
@@ -93,18 +107,22 @@ E:\toolsmith\
 │   └── Modelfile               # Default model definition
 ├── tool-transport/
 │   ├── mcpo-config.json        # MCPO bridge configuration
+│   ├── composite.py            # Composite tool framework (multi-step chains)
 │   └── TRANSPORT_DECISION.md   # Why MCPO was chosen
 ├── scripts/
 │   ├── build_model.ps1/.sh     # Build Ollama model
 │   ├── run_stack.ps1/.sh       # Start all services
 │   ├── test_stack.ps1/.sh      # Run all tests
-│   └── verify_stack.ps1        # Verify completeness
+│   ├── verify_stack.ps1        # Verify completeness
+│   └── test_tool_server.py     # MCP server protocol validator
 ├── tests/
-│   ├── tool_smoke_test.py      # Smoke tests
-│   ├── run_evals.py            # Eval runner
+│   ├── tool_smoke_test.py      # Smoke tests (+ --rerun-failed)
+│   ├── run_evals.py            # Eval runner (+ --rerun-failed)
+│   ├── classify_failures.py    # Failure classifier for retry loop
+│   ├── composite_smoke_test.py # Composite framework unit tests
 │   └── smoke_results.json      # Latest results
 ├── evals/
-│   ├── tool_use_cases.json     # Eval case definitions
+│   ├── tool_use_cases.json     # Eval cases (incl. composite tool cases)
 │   └── eval_results.json       # Latest eval results
 └── docs/
     ├── architecture.md          # This file
