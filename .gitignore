@@ -1,2 +1,19 @@
+# Generated test/eval results
 *_results.json
-smoke_results.json
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temp build artifacts
+*.tmp
+*.bak

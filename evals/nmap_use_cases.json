@@ -1,0 +1,245 @@
+{
+  "_description": "Eval cases for the kali-nmap model. Tests nmap-specific tool-use patterns.",
+  "test_cases": [
+    {
+      "name": "Basic port scan — correct tool and target",
+      "messages": [
+        {"role": "user", "content": "Scan 10.10.10.5 for open ports"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"},
+                "ports": {"type": "string"},
+                "scripts": {"type": "string"},
+                "extra_args": {"type": "string"},
+                "timeout": {"type": "integer"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "nmap_scan"},
+        {"type": "arg_value", "name": "target", "value": "10.10.10.5"}
+      ]
+    },
+    {
+      "name": "Specific port scan — includes port arg",
+      "messages": [
+        {"role": "user", "content": "Check if port 443 is open on 192.168.0.1"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"},
+                "ports": {"type": "string"},
+                "scripts": {"type": "string"},
+                "extra_args": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "nmap_scan"},
+        {"type": "arg_present", "name": "ports"},
+        {"type": "arg_value", "name": "ports", "value": "443"}
+      ]
+    },
+    {
+      "name": "Service version detection — uses -sV",
+      "messages": [
+        {"role": "user", "content": "Detect service versions on 10.0.0.3 ports 22,80,443"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"},
+                "ports": {"type": "string"},
+                "scripts": {"type": "string"},
+                "extra_args": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "nmap_scan"},
+        {"type": "arg_value", "name": "scan_type", "value": "-sV"}
+      ]
+    },
+    {
+      "name": "Ping sweep — uses -sn",
+      "messages": [
+        {"role": "user", "content": "Discover live hosts on the 192.168.1.0/24 subnet"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"},
+                "ports": {"type": "string"},
+                "scripts": {"type": "string"},
+                "extra_args": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "nmap_scan"},
+        {"type": "arg_value", "name": "scan_type", "value": "-sn"},
+        {"type": "arg_value", "name": "target", "value": "192.168.1.0/24"}
+      ]
+    },
+    {
+      "name": "Vulnerability scan — uses vuln scripts",
+      "messages": [
+        {"role": "user", "content": "Run a vulnerability scan on 10.10.10.5"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"},
+                "ports": {"type": "string"},
+                "scripts": {"type": "string"},
+                "extra_args": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "nmap_scan"},
+        {"type": "arg_present", "name": "scripts"}
+      ]
+    },
+    {
+      "name": "Result grounding — reports open ports from scan output",
+      "messages": [
+        {"role": "user", "content": "What services are running on this host?"},
+        {"role": "assistant", "content": "", "tool_calls": [
+          {"function": {"name": "nmap_scan", "arguments": {"target": "10.10.10.5", "scan_type": "-sV"}}}
+        ]},
+        {"role": "tool", "content": "{\"command\": \"nmap -sV 10.10.10.5\", \"output\": \"Starting Nmap 7.98\\nPORT     STATE SERVICE VERSION\\n22/tcp   open  ssh     OpenSSH 8.9p1\\n80/tcp   open  http    Apache httpd 2.4.52\\n3306/tcp open  mysql   MySQL 8.0.32\\nNmap done: 1 host up\", \"exit_code\": 0}"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"},
+                "scan_type": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "content_contains", "value": "ssh"},
+        {"type": "content_contains", "value": "apache"},
+        {"type": "content_contains", "value": "mysql"}
+      ]
+    },
+    {
+      "name": "Error grounding — handles failed scan",
+      "messages": [
+        {"role": "user", "content": "Scan 10.10.10.99"},
+        {"role": "assistant", "content": "", "tool_calls": [
+          {"function": {"name": "nmap_scan", "arguments": {"target": "10.10.10.99"}}}
+        ]},
+        {"role": "tool", "content": "{\"error\": true, \"message\": \"Scan timed out after 300 seconds. Try narrowing the target or port range.\"}"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "content_contains", "value": "timed out"}
+      ]
+    },
+    {
+      "name": "General knowledge — no tool call",
+      "messages": [
+        {"role": "user", "content": "What does the -sS flag do in nmap?"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "nmap_scan",
+            "description": "Run nmap scan against a target",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "target": {"type": "string"}
+              },
+              "required": ["target"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "no_tool_called"},
+        {"type": "content_contains", "value": "syn"}
+      ]
+    }
+  ]
+}
