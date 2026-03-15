@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ollama *)",
+      "Bash(curl http://localhost:*)",
+      "Bash(python tests/*)",
+      "Bash(python scripts/*)",
+      "Bash(uv run *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"[model-forge] Subagent task completed. Run: powershell -File scripts/verify_stack.ps1 OR python tests/tool_smoke_test.py to validate.\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

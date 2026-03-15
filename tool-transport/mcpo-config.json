@@ -1,0 +1,14 @@
+{
+  "_comment": "MCPO bridge configuration template. Add MCP servers here to expose them as OpenAPI endpoints for Open WebUI. Each entry wraps a stdio-based MCP server. MCPO runs at http://localhost:8800.",
+  "mcpServers": {
+    "example-tool": {
+      "_comment": "Replace this with a real MCP server. This is a template entry.",
+      "command": "python",
+      "args": ["tool-transport/servers/example-server.py"],
+      "env": {
+        "EXAMPLE_API_URL": "http://localhost:8000",
+        "EXAMPLE_API_TOKEN": ""
+      }
+    }
+  }
+}

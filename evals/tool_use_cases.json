@@ -1,0 +1,254 @@
+{
+  "_description": "Model Forge eval cases for tool-use validation. Each case tests a specific behavior pattern.",
+  "test_cases": [
+    {
+      "name": "Single tool — correct selection",
+      "messages": [
+        {"role": "user", "content": "What's the weather in Paris?"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {"city": {"type": "string", "description": "City name"}},
+              "required": ["city"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "get_weather"},
+        {"type": "arg_present", "name": "city"},
+        {"type": "arg_value", "name": "city", "value": "Paris"}
+      ]
+    },
+    {
+      "name": "Multi-tool — correct selection from 3 tools",
+      "messages": [
+        {"role": "user", "content": "Search the web for 'Ollama model format'"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {"city": {"type": "string"}},
+              "required": ["city"]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "search_web",
+            "description": "Search the web for information",
+            "parameters": {
+              "type": "object",
+              "properties": {"query": {"type": "string", "description": "Search query"}},
+              "required": ["query"]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read contents of a local file",
+            "parameters": {
+              "type": "object",
+              "properties": {"path": {"type": "string", "description": "File path"}},
+              "required": ["path"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "search_web"},
+        {"type": "arg_present", "name": "query"}
+      ]
+    },
+    {
+      "name": "No tool needed — simple question",
+      "messages": [
+        {"role": "user", "content": "What is the capital of France?"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {"city": {"type": "string"}},
+              "required": ["city"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "no_tool_called"},
+        {"type": "content_contains", "value": "paris"}
+      ]
+    },
+    {
+      "name": "Tool response grounding — uses returned data",
+      "messages": [
+        {"role": "user", "content": "Look up invoice #1234"},
+        {"role": "assistant", "content": "", "tool_calls": [
+          {"function": {"name": "lookup_invoice", "arguments": {"invoice_id": "1234"}}}
+        ]},
+        {"role": "tool", "content": "{\"invoice_id\": \"1234\", \"amount\": \"$850.00\", \"vendor\": \"Acme Corp\", \"status\": \"paid\", \"date\": \"2025-12-01\"}"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "lookup_invoice",
+            "description": "Look up an invoice by ID",
+            "parameters": {
+              "type": "object",
+              "properties": {"invoice_id": {"type": "string"}},
+              "required": ["invoice_id"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "content_contains", "value": "850"},
+        {"type": "content_contains", "value": "acme"}
+      ]
+    },
+    {
+      "name": "Tool response grounding — error handling",
+      "messages": [
+        {"role": "user", "content": "Get the weather in Atlantis"},
+        {"role": "assistant", "content": "", "tool_calls": [
+          {"function": {"name": "get_weather", "arguments": {"city": "Atlantis"}}}
+        ]},
+        {"role": "tool", "content": "{\"error\": true, \"message\": \"City not found: Atlantis\"}"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {"city": {"type": "string"}},
+              "required": ["city"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "content_contains", "value": "could not"}
+      ]
+    },
+    {
+      "name": "Complex argument — multiple required params",
+      "messages": [
+        {"role": "user", "content": "Send an email to alice@example.com with subject 'Meeting Tomorrow' and body 'Hi Alice, can we meet at 3pm?'"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "send_email",
+            "description": "Send an email to a recipient",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "to": {"type": "string", "description": "Recipient email address"},
+                "subject": {"type": "string", "description": "Email subject line"},
+                "body": {"type": "string", "description": "Email body text"}
+              },
+              "required": ["to", "subject", "body"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "send_email"},
+        {"type": "arg_present", "name": "to"},
+        {"type": "arg_present", "name": "subject"},
+        {"type": "arg_present", "name": "body"},
+        {"type": "arg_value", "name": "to", "value": "alice@example.com"}
+      ]
+    },
+    {
+      "name": "Optional parameter — included when relevant",
+      "messages": [
+        {"role": "user", "content": "Search for documents tagged 'finance' from last month"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "search_documents",
+            "description": "Search for documents with optional filters",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "tag": {"type": "string", "description": "Filter by tag name"},
+                "date_from": {"type": "string", "description": "Start date in YYYY-MM-DD format"}
+              },
+              "required": ["query"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "search_documents"},
+        {"type": "arg_present", "name": "tag"}
+      ]
+    },
+    {
+      "name": "Ambiguous request — prefers most specific tool",
+      "messages": [
+        {"role": "user", "content": "Find all PDF files in the project"}
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "search_web",
+            "description": "Search the web for information",
+            "parameters": {
+              "type": "object",
+              "properties": {"query": {"type": "string"}},
+              "required": ["query"]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "list_files",
+            "description": "List files in a directory with optional extension filter",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "directory": {"type": "string", "description": "Directory path"},
+                "extension": {"type": "string", "description": "File extension filter, e.g. '.pdf'"}
+              },
+              "required": ["directory"]
+            }
+          }
+        }
+      ],
+      "assertions": [
+        {"type": "tool_called", "name": "list_files"}
+      ]
+    }
+  ]
+}

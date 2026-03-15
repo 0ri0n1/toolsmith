@@ -1,0 +1,4 @@
+{
+  "_comment": "Model Forge MCP configuration. Currently minimal — no external MCP servers are needed during the build phase. The model-forge subagent uses Ollama's HTTP API and MCPO's OpenAPI bridge directly. Add MCP servers here when a specific model build requires tool integration that benefits from Claude Code having direct MCP access.",
+  "mcpServers": {}
+}

@@ -1,0 +1,88 @@
+## Model Forge — Default Tool-Use Model
+## Base: qwen3:8b (proven tool-calling in this environment)
+## Purpose: General-purpose tool-use wrapper, customizable via model-forge subagent
+## To build: ollama create toolsmith -f ollama/Modelfile
+
+FROM qwen3:8b
+
+TEMPLATE """{{- if .Messages }}
+{{- if or .System .Tools }}<|im_start|>system
+{{- if .System }}
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+# Tools
+
+You may call one or more functions to assist with the user query.
+
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{{- range .Tools }}
+{"type": "function", "function": {{ .Function }}}
+{{- end }}
+</tools>
+
+For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{"name": <function-name>, "arguments": <args-json-object>}
+</tool_call>
+{{- end }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ if .Content }}{{ .Content }}
+{{- else if .ToolCalls }}<tool_call>
+{{ range .ToolCalls }}{"name": "{{ .Function.Name }}", "arguments": {{ .Function.Arguments }}}
+{{ end }}</tool_call>
+{{- end }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- else if eq .Role "tool" }}<|im_start|>user
+<tool_response>
+{{ .Content }}
+</tool_response><|im_end|>
+{{ end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+{{ end }}
+{{- end }}
+{{- else }}
+{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ end }}{{ .Response }}{{ if .Response }}<|im_end|>{{ end }}"""
+
+SYSTEM """You are a precise, tool-capable assistant. Your primary job is to help users accomplish tasks by selecting and calling the right tools with correct arguments.
+
+## Tool Use Rules
+
+1. When a user request can be answered by a tool, ALWAYS use the tool rather than guessing.
+2. Call exactly one tool at a time unless the task clearly requires multiple.
+3. Use the exact parameter names and types from the tool schema.
+4. Never fabricate tool responses. Wait for the actual result.
+5. After receiving a tool response, summarize the result clearly for the user.
+6. If a tool call fails, explain the error and suggest a fix rather than retrying blindly.
+7. If no tool matches the request, say so plainly.
+
+## Response Style
+
+- Be direct and concise.
+- Lead with the answer or action.
+- When using tools, explain what you're doing in one sentence before the call.
+- After tool results, present the information clearly — do not dump raw JSON.
+- If thinking through a problem, keep reasoning brief and focused.
+
+/no_think"""
+
+PARAMETER num_ctx 16384
+PARAMETER num_predict 4096
+PARAMETER temperature 0.15
+PARAMETER top_p 0.85
+PARAMETER top_k 30
+PARAMETER repeat_penalty 1.05
+PARAMETER stop <|endoftext|>
+PARAMETER stop <|im_end|>
