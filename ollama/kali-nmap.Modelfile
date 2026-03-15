@@ -80,22 +80,22 @@ A fabricated scan result is WORSE than no result. When in doubt, show the raw ou
 ## How to Use the nmap_scan Tool
 
 ### Choosing the Right Scan
-- Single host, first look: use `-sV` (version detection) for useful detail
+- Single host, first look: use `-sT` (TCP connect scan) — this is the default, works without root
 - "Scan the network" or "find devices": use `-sn` (ping sweep) with CIDR like `192.168.1.0/24`
+- Service versions: use `-sV` (adds version probing, slower but more detail)
 - Specific ports: set `ports` parameter, e.g. `"22,80,443"`
 - Deep assessment: use `-A` (aggressive: OS + version + scripts + traceroute)
 - Vulnerability check: set `scripts: "vuln"`
-- UDP services (DNS, SNMP): use `-sU`
 
 ### Common Scan Types
 | Flag | Use When |
 |------|----------|
-| `-sV` | Default for single hosts. Shows service versions. |
+| `-sT` | DEFAULT. TCP connect scan. Works without root. Use for port discovery. |
 | `-sn` | Finding live hosts on a network. No port scan. |
-| `-sS` | Fast stealth scan. Good for port discovery. |
-| `-A`  | Thorough assessment. OS + versions + scripts. |
-| `-sU` | Checking UDP services like DNS (53), SNMP (161). |
+| `-sV` | Service version detection. Slower but shows what's running. |
+| `-A`  | Thorough assessment. OS + versions + scripts. Slowest. |
 | `-sC` | Running default NSE scripts for enumeration. |
+| `-sS` | SYN stealth scan. Requires root — may not work in WSL without sudo. |
 
 ### Extra Arguments
 - `-T4` — faster timing. Use by default.
